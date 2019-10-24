@@ -41,8 +41,8 @@ function analyze (token) {
     return { type: type, child: [], parent: parent, scope: 'value' }
   }
 
-  function getLastChild (needle) {
-    return needle.child[needle.child.length - 1]
+  function getLastChild (p) {
+    return p.child[p.child.length - 1]
   }
 
   function unexpectedToken (curr) {
@@ -55,7 +55,7 @@ function analyze (token) {
     parent: null
   }
 
-  let needle = tree
+  let p = tree
 
   while (token.length) {
     const curr = token.shift()
@@ -66,50 +66,50 @@ function analyze (token) {
 
     switch (curr.type) {
       case '{': {
-        const node = createNode('object', needle)
-        needle.child.push(node)
-        needle = node
+        const node = createNode('object', p)
+        p.child.push(node)
+        p = node
         break
       }
       case '[': {
-        const node = createNode('array', needle)
-        needle.child.push(node)
-        needle = node
+        const node = createNode('array', p)
+        p.child.push(node)
+        p = node
         break
       }
       case '}': {
-        const lastChild = getLastChild(needle)
-        if (needle.type === 'object' &&
+        const lastChild = getLastChild(p)
+        if (p.type === 'object' &&
           (!lastChild || lastChild.scope === 'value')) {
-          needle = needle.parent
+          p = p.parent
         } else {
           throw unexpectedToken(curr)
         }
         break
       }
       case ']': {
-        const lastChild = getLastChild(needle)
-        if (needle.type === 'array' &&
+        const lastChild = getLastChild(p)
+        if (p.type === 'array' &&
           (!lastChild || lastChild.scope === 'value')) {
-          needle = needle.parent
+          p = p.parent
         } else {
           throw unexpectedToken(curr)
         }
         break
       }
       case 's': {
-        const lastChild = getLastChild(needle)
-        if (needle.type === 'object') {
+        const lastChild = getLastChild(p)
+        if (p.type === 'object') {
           if (!lastChild || lastChild.type === ',') {
-            needle.child.push({ type: curr.type, value: curr.value, scope: 'key' })
+            p.child.push({ type: curr.type, value: curr.value, scope: 'key' })
           } else if (lastChild && lastChild.type === ':') {
-            needle.child.push({ type: curr.type, value: curr.value, scope: 'value' })
+            p.child.push({ type: curr.type, value: curr.value, scope: 'value' })
           } else {
             throw unexpectedToken(curr)
           }
-        } else if (needle.type === 'array') {
+        } else if (p.type === 'array') {
           if (!lastChild || lastChild.type === ',') {
-            needle.child.push({ type: curr.type, value: curr.value, scope: 'value' })
+            p.child.push({ type: curr.type, value: curr.value, scope: 'value' })
           } else {
             throw unexpectedToken(curr)
           }
@@ -120,13 +120,13 @@ function analyze (token) {
       case 't':
       case 'f':
       case 'nil': {
-        const lastChild = getLastChild(needle)
+        const lastChild = getLastChild(p)
 
         if (
-          (needle.type === 'object' && lastChild && lastChild.type === ':') ||
-          (needle.type === 'array' && (!lastChild || lastChild.type === ','))
+          (p.type === 'object' && lastChild && lastChild.type === ':') ||
+          (p.type === 'array' && (!lastChild || lastChild.type === ','))
         ) {
-          needle.child.push({ type: curr.type, value: curr.value, scope: 'value' })
+          p.child.push({ type: curr.type, value: curr.value, scope: 'value' })
         } else {
           throw unexpectedToken(curr)
         }
@@ -134,18 +134,18 @@ function analyze (token) {
         break
       }
       case ',': {
-        const lastChild = getLastChild(needle)
+        const lastChild = getLastChild(p)
         if (lastChild && lastChild.scope === 'value') {
-          needle.child.push({ type: curr.type, value: curr.value })
+          p.child.push({ type: curr.type, value: curr.value })
         } else {
           throw unexpectedToken(curr)
         }
         break
       }
       case ':': {
-        const lastChild = getLastChild(needle)
+        const lastChild = getLastChild(p)
         if (lastChild && lastChild.scope === 'key') {
-          needle.child.push({ type: curr.type, value: curr.value })
+          p.child.push({ type: curr.type, value: curr.value })
         } else {
           throw unexpectedToken(curr)
         }
@@ -155,24 +155,24 @@ function analyze (token) {
         throw unexpectedToken(curr)
     }
   }
-  if (needle !== tree) throw unexpectedToken(token[0])
+  if (p !== tree) throw unexpectedToken(token[0])
   return tree.child[0]
 }
 
-function join (node) {
+function toObject (node) {
   switch (node.type) {
     case 'object': {
       const result = {}
-      let needle = null
+      let p = null
       node.child.forEach(cnode => {
         if (cnode.scope === 'key') {
           result[cnode.value] = undefined
-          if (needle) throw new Error('wrong')
-          needle = cnode.value
+          if (p) throw new Error('wrong')
+          p = cnode.value
         } else if (cnode.scope === 'value') {
-          if (typeof result[needle] === 'undefined') {
-            result[needle] = (cnode.type === 'array' || cnode.type === 'object') ? join(cnode) : cnode.value
-            needle = null
+          if (typeof result[p] === 'undefined') {
+            result[p] = (cnode.type === 'array' || cnode.type === 'object') ? toObject(cnode) : cnode.value
+            p = null
           } else {
             throw new Error('wrong')
           }
@@ -183,11 +183,11 @@ function join (node) {
     case 'array': {
       const result = []
       node.child.forEach(cnode => {
-        if (cnode.scope === 'value') result.push((cnode.type === 'array' || cnode.type === 'object') ? join(cnode) : cnode.value)
+        if (cnode.scope === 'value') result.push((cnode.type === 'array' || cnode.type === 'object') ? toObject(cnode) : cnode.value)
       })
       return result
     }
   }
 }
 
-module.exports = str => join(analyze(tokenize(str)))
+module.exports = str => toObject(analyze(tokenize(str)))
