@@ -60,10 +60,6 @@ function analyze (token) {
   while (token.length) {
     const curr = token.shift()
 
-    // if (stack.top() === '$' && (curr !== '{' || curr !== '{' || token.length)) {
-    //   throw new Error(`unexpected token: ${curr}`)
-    // }
-
     switch (curr.type) {
       case '{': {
         const node = createNode('object', p)
